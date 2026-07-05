@@ -1,213 +1,309 @@
+# Cherry Studio Knowledge Automation Fork
 
-<h1 align="center">
-  <a href="https://github.com/CherryHQ/cherry-studio/releases">
-    <img src="https://github.com/CherryHQ/cherry-studio/blob/main/build/icon.png?raw=true" width="150" height="150" alt="banner" /><br>
-  </a>
-</h1>
+Languages: English | [简体中文](docs/zh/README.md)
 
-<p align="center">English | <a href="https://cherryai.com">Official Site</a> | <a href="https://cherryai.com/docs/en/">Documentation</a> | <a href="./docs/dev/contrib/development.md">Development</a> | <a href="https://github.com/CherryHQ/cherry-studio/issues">Feedback</a><br></p>
+This repository is a Cherry Studio fork focused on making large local knowledge bases practical to maintain over time.
 
-<div align="center">
+The main improvements in this branch are:
 
-[![][deepwiki-shield]][deepwiki-link]
-[![][twitter-shield]][twitter-link]
-[![][discord-shield]][discord-link]
-[![][telegram-shield]][telegram-link]
+- Incremental directory refresh for Cherry Studio knowledge bases
+- New Knowledge Base maintenance APIs for adding directories, refreshing directories, refreshing individual files, and polling jobs
+- File-level sidecar indexing with content hashes to avoid re-embedding unchanged files
+- CLI tooling for syncing configured local folders into Cherry Studio knowledge bases
+- Better progress reporting for long-running directory indexing jobs
+- OpenAPI documentation for the new maintenance endpoints
 
-</div>
-<div align="center">
+Upstream Cherry Studio is still the foundation of this project: a cross-platform desktop AI client with multi-provider LLM support, assistants, document processing, MCP integration, and knowledge-base search.
 
-[![][github-release-shield]][github-release-link]
-[![][github-nightly-shield]][github-nightly-link]
-[![][github-contributors-shield]][github-contributors-link]
-[![][license-shield]][license-link]
-[![][commercial-shield]][commercial-link]
-[![][sponsor-shield]][sponsor-link]
+## What changed for Knowledge Bases
 
-</div>
+### Incremental directory indexing
 
-<div align="center">
- <a href="https://hellogithub.com/repository/1605492e1e2a4df3be07abfa4578dd37" target="_blank" style="text-decoration: none"><img src="https://api.hellogithub.com/v1/widgets/recommend.svg?rid=1605492e1e2a4df3be07abfa4578dd37" alt="Featured｜HelloGitHub"  width="220" height="55" /></a>
- <a href="https://trendshift.io/repositories/14318" target="_blank" style="text-decoration: none"><img src="https://trendshift.io/api/badge/repositories/14318" alt="CherryHQ%2Fcherry-studio | Trendshift" width="220" height="55" /></a>
- <a href="https://www.producthunt.com/posts/cherry-studio?embed=true&utm_source=badge-featured&utm_medium=badge&utm_souce=badge-cherry&#0045;studio" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=496640&theme=light" alt="Cherry&#0032;Studio - AI&#0032;Chatbots&#0044;&#0032;AI&#0032;Desktop&#0032;Client | Product Hunt" width="220" height="55" /></a>
-</div>
+Cherry Studio can now keep a file-level sidecar index for directory knowledge items. After a directory has a sidecar index, refresh jobs compare files by path, size, extension, mtime, and content hash.
 
-# 🍒 Cherry Studio
+That means a refresh only processes:
 
-Cherry Studio is an AI workstation for Windows, macOS, and Linux. Chat with multiple models, work with agents, build knowledge bases, create images, and automate everyday tasks in one place.
+- newly added files
+- modified files
+- deleted files that need their loaders removed
 
-**[Download Desktop](https://cherryai.com/download)** · **[Getting Started](https://cherryai.com/docs/en/getting-started/quick-start/)**
+Unchanged files keep their existing loader IDs and are not embedded again.
 
-📱 **Cherry Studio Mobile is now available for iOS and Android!** [Download](https://cherryai.com/mobile) · [GitHub repository](https://github.com/CherryHQ/cherry-studio-app).
+### Knowledge Base maintenance API
 
-👏 Join [Telegram Group](https://t.me/CherryStudioAI)｜[Discord](https://discord.gg/wez8HtpxqQ) | [QQ Group(575014769)](https://qm.qq.com/q/lo0D4qVZKi)
+The local API server now includes write-side maintenance endpoints:
 
-❤️ Like Cherry Studio? Give it a star 🌟 or [Sponsor](docs/dev/sponsor.md) to support the development!
+```http
+POST /v1/knowledge-bases/{id}/directories
+POST /v1/knowledge-bases/{id}/directories/{itemId}/refresh
+POST /v1/knowledge-bases/{id}/directories/{itemId}/files/refresh
+GET  /v1/knowledge-bases/jobs/{jobId}
+```
 
-# 🌠 Screenshots
+The APIs are designed for local automation scripts, scheduled jobs, and personal knowledge-ingestion pipelines.
 
-**Agents — work with files, tools, and multi-step tasks.**
+### CLI sync workflow
 
-![Cherry Studio agent workspace creating a presentation](.github/images/readme/agent-light-en.webp)
+The CLI helper at `scripts/cherry-knowledge.ts` can:
 
-**Conversations — explore ideas with your models and assistants.**
+- list knowledge bases
+- add a directory to a knowledge base
+- refresh a full directory
+- refresh one file inside a directory
+- sync many directories from a YAML/JSON config file
+- wait for jobs and print progress
 
-![Cherry Studio conversation displaying a Mermaid chart](.github/images/readme/chat-light-en.webp)
+## Prerequisites
 
-**Model providers — configure services, API keys, and models in one place.**
+1. Open Cherry Studio.
+2. Enable the local API Server in Cherry Studio settings.
+3. Make sure you have the API key if the API Server has authentication enabled.
+4. Install dependencies for this repository:
 
-![Cherry Studio model provider settings in light mode](.github/images/readme/provider-light-en.webp)
+```bash
+corepack pnpm install
+```
 
-**Knowledge bases — organize sources for retrieval and agent workflows.**
+The default local API base is:
 
-![Cherry Studio knowledge base with folders and documents](.github/images/readme/knowledge-light-en.webp)
+```text
+http://127.0.0.1:23333
+```
 
-**Image creation — turn prompts into images and refine your work.**
+You can override it with either:
 
-![Cherry Studio image creation workspace](.github/images/readme/drawing-light-en.webp)
+```bash
+CHERRY_KB_API_BASE=http://127.0.0.1:23333
+```
 
-# 🌟 Key Features
+or:
 
-## Agents & Automation
+```bash
+CHERRY_API_BASE=http://127.0.0.1:23333
+```
 
-- 🤖 Create agents with their own instructions, workspaces, models, and tool permissions.
-- 🛠️ Work with files, run commands, and use browser and computer automation tools.
-- 🔌 Extend capabilities with Skills and MCP (Model Context Protocol) servers.
-- ⏰ Run scheduled tasks and connect agents to messaging platforms through Channels.
+## Authentication
 
-## Models & Conversations
+Pass the API key directly:
 
-- ☁️ Connect OpenAI, Anthropic, Gemini, and other cloud providers, or add custom compatible services.
-- 💻 Use local models through Ollama and LM Studio.
-- 💬 Customize assistants and compare responses from multiple models in one conversation.
-- 📝 Read and share rich responses with Markdown, code highlighting, formulas, Mermaid charts, and conversation exports.
+```bash
+corepack pnpm exec tsx scripts/cherry-knowledge.ts list \
+  --api-key cs-sk-your-key
+```
 
-## Knowledge & Documents
+Or store it in a file and pass the file path:
 
-- 📚 Build local knowledge bases from files, folders, and web pages, then use them in conversations and agents.
-- 📄 Process PDF, Office documents, images, and text, with OCR and document processing options.
-- ✍️ Organize ideas in Markdown notes and manage attachments and generated files in the file library.
+```bash
+corepack pnpm exec tsx scripts/cherry-knowledge.ts list \
+  --api-key-file ~/.cherry-api-key
+```
 
-## Creative & Everyday Tools
+The helper also understands simple key-file formats such as:
+
+```text
+cs-sk-your-key
+```
+
+```text
+Bearer cs-sk-your-key
+```
+
+```text
+CHERRY_API_KEY=cs-sk-your-key
+```
+
+## CLI Usage
+
+### List knowledge bases
+
+```bash
+corepack pnpm exec tsx scripts/cherry-knowledge.ts list \
+  --api http://127.0.0.1:23333 \
+  --api-key-file ~/.cherry-api-key
+```
+
+### Add a directory to a knowledge base
+
+```bash
+corepack pnpm exec tsx scripts/cherry-knowledge.ts add-directory \
+  --api http://127.0.0.1:23333 \
+  --api-key-file ~/.cherry-api-key \
+  --base <knowledge-base-id> \
+  --path "C:\path\to\docs" \
+  --wait
+```
+
+Adding a new directory indexes it and creates the sidecar file index used by future incremental refreshes.
 
-- 🎨 Generate and edit images with supported image models.
-- 🔤 Translate text and documents, and use quick translation from other apps.
-- 🔍 Search the web, read pages, and find content across your conversations and knowledge bases.
-- 🧩 Open web-based tools through Mini Apps, or use the API Gateway to connect other applications to your configured models.
+### Refresh an existing directory
+
+Full refresh:
 
-## Voice & Workspace
+```bash
+corepack pnpm exec tsx scripts/cherry-knowledge.ts refresh-directory \
+  --api-key-file ~/.cherry-api-key \
+  --base <knowledge-base-id> \
+  --item <directory-item-id> \
+  --mode full \
+  --wait
+```
+
+Incremental refresh:
 
-- 🎙️ Dictate messages and listen to responses with speech recognition and text-to-speech options, including local models.
-- 🪟 Work across tabs and detached windows, with window pinning, Quick Assistant, and text selection tools.
-- 🌈 Customize your workspace with light and dark themes, layouts, and custom CSS.
-- 💾 Keep conversation history and knowledge bases on your device, with local and WebDAV backup options.
+```bash
+corepack pnpm exec tsx scripts/cherry-knowledge.ts refresh-directory \
+  --api-key-file ~/.cherry-api-key \
+  --base <knowledge-base-id> \
+  --item <directory-item-id> \
+  --mode incremental \
+  --wait
+```
 
-Model and tool availability depends on your provider, operating system, and configuration. Some features require API credentials, downloaded models, additional dependencies, or system permissions. See the [user documentation](https://cherryai.com/docs/en/) for setup.
+If a directory does not yet have a sidecar index, incremental refresh returns a clear error. Run one full refresh once to build the baseline, then use incremental refresh after that.
 
-# 📝 Roadmap
+### Refresh one file inside a directory
 
-Follow upcoming work on our [project board](https://github.com/orgs/CherryHQ/projects/7) and [GitHub Issues](https://github.com/CherryHQ/cherry-studio/issues). See [Releases](https://github.com/CherryHQ/cherry-studio/releases) for features and fixes already shipped.
+```bash
+corepack pnpm exec tsx scripts/cherry-knowledge.ts refresh-file \
+  --api-key-file ~/.cherry-api-key \
+  --base <knowledge-base-id> \
+  --directory-item <directory-item-id> \
+  --file "C:\path\to\docs\one-file.md" \
+  --wait
+```
+
+If the file already exists in the sidecar index, the old loader is removed and the file is embedded again. If the file is new, it is indexed as a new file and added to the directory item.
 
-Share ideas and discuss priorities in [GitHub Discussions](https://github.com/CherryHQ/cherry-studio/discussions).
+### Check a job
 
-# 🌈 Theme
+```bash
+corepack pnpm exec tsx scripts/cherry-knowledge.ts job \
+  --api-key-file ~/.cherry-api-key \
+  --job <job-id>
+```
 
-- Theme Gallery: <https://cherrycss.com>
-- Aero Theme: <https://github.com/hakadao/CherryStudio-Aero>
-- PaperMaterial Theme: <https://github.com/rainoffallingstar/CherryStudio-PaperMaterial>
-- Claude dynamic-style: <https://github.com/bjl101501/CherryStudio-Claudestyle-dynamic>
-- Maple Neon Theme: <https://github.com/Cle2ment/maple_neon>
+## Sync many directories from a config file
 
-Check each community theme's supported Cherry Studio version before installing. Themes written for v1 need adaptation for the v2 interface.
+Create a YAML file that maps knowledge-base names to local directories:
 
-Contributions of compatible themes are welcome.
+```yaml
+Research:
+  - 'C:\Knowledge\papers'
+  - 'C:\Knowledge\notes'
+Podcasts:
+  - 'D:\Transcripts\tech'
+  - 'D:\Transcripts\health'
+```
 
-# 🤝 Contributing
+Then run:
 
-Contributions of code, bug reports, documentation, translations, product ideas, and community support are welcome. Browse [good first issues](https://github.com/CherryHQ/cherry-studio/labels/good%20first%20issue) to find a place to start.
+```bash
+corepack pnpm exec tsx scripts/cherry-knowledge.ts sync-directories \
+  --api-key-file ~/.cherry-api-key \
+  --config kb-dirs.yaml \
+  --wait
+```
 
-## Getting Started
+By default, existing directories are skipped and only missing directory bindings are added.
 
-1. Read the [Contributing Guide](CONTRIBUTING.md) and [Development Guide](docs/dev/contrib/development.md).
-2. Fork the repository and create a focused branch from `main`.
-3. Validate your changes, sign and sign off your commits, and open a pull request targeting `main` using the repository template.
+To refresh existing configured directories too:
 
-See the [Branching Strategy](docs/dev/contrib/branching-strategy.md) for branch and release conventions.
+```bash
+corepack pnpm exec tsx scripts/cherry-knowledge.ts sync-directories \
+  --api-key-file ~/.cherry-api-key \
+  --config kb-dirs.yaml \
+  --refresh-existing \
+  --wait
+```
 
-# 🏢 Enterprise Edition
+For strict incremental sync of existing directories:
 
-Cherry Studio Enterprise Edition brings centralized model management, shared knowledge bases, employee access controls, and private deployment options to teams and organizations.
+```bash
+corepack pnpm exec tsx scripts/cherry-knowledge.ts sync-directories \
+  --api-key-file ~/.cherry-api-key \
+  --config kb-dirs.yaml \
+  --refresh-existing \
+  --mode incremental \
+  --wait
+```
 
-Visit the [Enterprise website](https://enterprise.cherryai.com) for current capabilities and deployment information. For purchasing, pricing, or a demo, contact [bd@cherry-ai.com](mailto:bd@cherry-ai.com).
+This is useful for automation because it does not silently fall back to a full re-embedding pass when an old directory lacks a sidecar index.
 
-# 🔗 Related Projects
+## Recommended automation pattern
 
-- [Cherry Studio Mobile](https://github.com/CherryHQ/cherry-studio-app): The mobile version of Cherry Studio for iOS and Android.
+For a large personal knowledge collection:
 
-- [Cherry Studio Website](https://github.com/CherryHQ/cherry-studio-website): The official website and user documentation.
+1. Run `sync-directories --config kb-dirs.yaml --wait` to add any directories that are not bound yet.
+2. Run `sync-directories --config kb-dirs.yaml --refresh-existing --mode incremental --wait` to process new, changed, and deleted files for existing directories.
+3. If a legacy directory fails because it has no sidecar index, run a one-time full refresh for that directory, then return to incremental mode.
 
-- [new-api](https://github.com/QuantumNous/new-api): The next-generation LLM gateway and AI asset management system supports multiple languages.
+## API Examples
 
-- [one-api](https://github.com/songquanpeng/one-api): LLM API management and distribution system supporting mainstream models like OpenAI, Azure, and Anthropic. Features a unified API interface, suitable for key management and secondary distribution.
+### Add directory
 
-- [Poe](https://poe.com/): A platform for exploring AI models and community-created bots.
+```bash
+curl -X POST "http://127.0.0.1:23333/v1/knowledge-bases/<base-id>/directories" \
+  -H "Authorization: Bearer cs-sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"path":"C:\\path\\to\\docs","mode":"enqueue","refresh_if_exists":false}'
+```
 
-- [ublacklist](https://github.com/iorate/ublacklist): Blocks specific sites from appearing in Google search results
+### Incrementally refresh directory
 
-# 🚀 Contributors
+```bash
+curl -X POST "http://127.0.0.1:23333/v1/knowledge-bases/<base-id>/directories/<item-id>/refresh" \
+  -H "Authorization: Bearer cs-sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"incremental"}'
+```
 
-<a href="https://github.com/CherryHQ/cherry-studio/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=CherryHQ/cherry-studio" />
-</a>
-<br /><br />
+### Refresh one file
 
-# 📊 GitHub Stats
+```bash
+curl -X POST "http://127.0.0.1:23333/v1/knowledge-bases/<base-id>/directories/<item-id>/files/refresh" \
+  -H "Authorization: Bearer cs-sk-your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"path":"C:\\path\\to\\docs\\one-file.md"}'
+```
 
-![Stats](https://repobeats.axiom.co/api/embed/a693f2e5f773eed620f70031e974552156c7f397.svg "Repobeats analytics image")
+### Poll job status
 
-# ⭐️ Star History
+```bash
+curl "http://127.0.0.1:23333/v1/knowledge-bases/jobs/<job-id>" \
+  -H "Authorization: Bearer cs-sk-your-key"
+```
 
-<a href="https://star-history.dera.page/#CherryHQ/cherry-studio&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://star-history.dera.page/svg?repos=CherryHQ/cherry-studio&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://star-history.dera.page/svg?repos=CherryHQ/cherry-studio&type=Date" />
-   <img alt="Star History Chart" src="https://star-history.dera.page/svg?repos=CherryHQ/cherry-studio&type=Date" />
- </picture>
-</a>
+Job responses include progress fields such as `progress`, `current_file`, `total_files`, and `processed_files` for directory jobs.
 
-# 📜 License
+## Development
 
-The Cherry Studio Community Edition is governed by the standard GNU Affero General Public License v3.0 (AGPL-3.0), available at https://www.gnu.org/licenses/agpl-3.0.html.
+Run the focused tests for this feature:
 
-Use of the Cherry Studio Community Edition for commercial purposes is permitted, subject to full compliance with the terms and conditions of the AGPL-3.0 license.
+```bash
+corepack pnpm exec vitest run \
+  src/main/services/__tests__/KnowledgeDirectoryIndexService.test.ts \
+  src/main/services/__tests__/KnowledgeMaintenanceService.test.ts
+```
 
-Should you require a commercial license that provides an exemption from the AGPL-3.0 requirements, please contact us at bd@cherry-ai.com.
+The broader Cherry Studio development commands still apply:
 
-<!-- Links & Images -->
+```bash
+corepack pnpm dev
+corepack pnpm lint
+corepack pnpm test
+corepack pnpm format
+```
 
-[deepwiki-shield]: https://img.shields.io/badge/Deepwiki-CherryHQ-0088CC?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNy45MyAzMiI+PHBhdGggZD0iTTE5LjMzIDE0LjEyYy42Ny0uMzkgMS41LS4zOSAyLjE4IDBsMS43NCAxYy4wNi4wMy4xMS4wNi4xOC4wN2guMDRjLjA2LjAzLjEyLjAzLjE4LjAzaC4wMmMuMDYgMCAuMTEgMCAuMTctLjAyaC4wM2MuMDYtLjAyLjEyLS4wNS4xNy0uMDhoLjAybDMuNDgtMi4wMWMuMjUtLjE0LjQtLjQxLjQtLjdWOC40YS44MS44MSAwIDAgMC0uNC0uN2wtMy40OC0yLjAxYS44My44MyAwIDAgMC0uODEgMEwxOS43NyA3LjdoLS4wMWwtLjE1LjEyLS4wMi4wMnMtLjA3LjA5LS4xLjE0VjhhLjQuNCAwIDAgMC0uMDguMTd2LjA0Yy0uMDMuMDYtLjAzLjEyLS4wMy4xOXYyLjAxYzAgLjc4LS40MSAxLjQ5LTEuMDkgMS44OC0uNjcuMzktMS41LjM5LTIuMTggMGwtMS43NC0xYS42LjYgMCAwIDAtLjIxLS4wOGMtLjA2LS4wMS0uMTItLjAyLS4xOC0uMDJoLS4wM2MtLjA2IDAtLjExLjAxLS4xNy4wMmgtLjAzYy0uMDYuMDItLjEyLjA0LS4xNy4wN2gtLjAybC0zLjQ3IDIuMDFjLS4yNS4xNC0uNC40MS0uNC43VjE4YzAgLjI5LjE1LjU1LjQuN2wzLjQ4IDIuMDFoLjAyYy4wNi4wNC4xMS4wNi4xNy4wOGguMDNjLjA1LjAyLjExLjAzLjE3LjAzaC4wMmMuMDYgMCAuMTIgMCAuMTgtLjAyaC4wNGMuMDYtLjAzLjEyLS4wNS4xOC0uMDhsMS43NC0xYy42Ny0uMzkgMS41LS4zOSAyLjE3IDBzMS4wOSAxLjExIDEuMDkgMS44OHYyLjAxYzAgLjA3IDAgLjEzLjAyLjE5di4wNGMuMDMuMDYuMDUuMTIuMDguMTd2LjAycy4wOC4wOS4xMi4xM2wuMDIuMDJzLjA5LjA4LjE1LjExYzAgMCAuMDEgMCAuMDEuMDFsMy40OCAyLjAxYy4yNS4xNC41Ni4xNC44MSAwbDMuNDgtMi4wMWMuMjUtLjE0LjQtLjQxLjQtLjd2LTQuMDFhLjgxLjgxIDAgMCAwLS40LS43bC0zLjQ4LTIuMDFoLS4wMmMtLjA1LS4wNC0uMTEtLjA2LS4xNy0uMDhoLS4wM2EuNS41IDAgMCAwLS4xNy0uMDNoLS4wM2MtLjA2IDAtLjEyIDAtLjE4LjAyLS4wNy4wMi0uMTUuMDUtLjIxLjA4bC0xLjc0IDFjLS42Ny4zOS0xLjUuMzktMi4xNyAwYTIuMTkgMi4xOSAwIDAgMS0xLjA5LTEuODhjMC0uNzguNDItMS40OSAxLjA5LTEuODhaIiBzdHlsZT0iZmlsbDojNWRiZjlkIi8+PHBhdGggZD0ibS40IDEzLjExIDMuNDcgMi4wMWMuMjUuMTQuNTYuMTQuOCAwbDMuNDctMi4wMWguMDFsLjE1LS4xMi4wMi0uMDJzLjA3LS4wOS4xLS4xNGwuMDItLjAyYy4wMy0uMDUuMDUtLjExLjA3LS4xN3YtLjA0Yy4wMy0uMDYuMDMtLjEyLjAzLS4xOVYxMC40YzAtLjc4LjQyLTEuNDkgMS4wOS0xLjg4czEuNS0uMzkgMi4xOCAwbDEuNzQgMWMuMDcuMDQuMTQuMDcuMjEuMDguMDYuMDEuMTIuMDIuMTguMDJoLjAzYy4wNiAwIC4xMS0uMDEuMTctLjAyaC4wM2MuMDYtLjAyLjEyLS4wNC4xNy0uMDdoLjAybDMuNDctMi4wMmMuMjUtLjE0LjQtLjQxLjQtLjd2LTRhLjgxLjgxIDAgMCAwLS40LS43bC0zLjQ2LTJhLjgzLjgzIDAgMCAwLS44MSAwbC0zLjQ4IDIuMDFoLS4wMWwtLjE1LjEyLS4wMi4wMi0uMS4xMy0uMDIuMDJjLS4wMy4wNS0uMDUuMTEtLjA3LjE3di4wNGMtLjAzLjA2LS4wMy4xMi0uMDMuMTl2Mi4wMWMwIC43OC0uNDIgMS40OS0xLjA5IDEuODhzLTEuNS4zOS0yLjE4IDBsLTEuNzQtMWEuNi42IDAgMCAwLS4yMS0uMDhjLS4wNi0uMDEtLjEyLS4wMi0uMTgtLjAyaC0uMDNjLS4wNiAwLS4xMS4wMS0uMTcuMDJoLS4wM2MtLjA2LjAyLS4xMi4wNS0uMTcuMDhoLS4wMkwuNCA3LjcxYy0uMjUuMTQtLjQuNDEtLjQuNjl2NC4wMWMwIC4yOS4xNS41Ni40LjciIHN0eWxlPSJmaWxsOiM0NDY4YzQiLz48cGF0aCBkPSJtMTcuODQgMjQuNDgtMy40OC0yLjAxaC0uMDJjLS4wNS0uMDQtLjExLS4wNi0uMTctLjA4aC0uMDNhLjUuNSAwIDAgMC0uMTctLjAzaC0uMDNjLS4wNiAwLS4xMiAwLS4xOC4wMmgtLjA0Yy0uMDYuMDMtLjEyLjA1LS4xOC4wOGwtMS43NCAxYy0uNjcuMzktMS41LjM5LTIuMTggMGEyLjE5IDIuMTkgMCAwIDEtMS4wOS0xLjg4di0yLjAxYzAtLjA2IDAtLjEzLS4wMi0uMTl2LS4wNGMtLjAzLS4wNi0uMDUtLjExLS4wOC0uMTdsLS4wMi0uMDJzLS4wNi0uMDktLjEtLjEzTDguMjkgMTlzLS4wOS0uMDgtLjE1LS4xMWgtLjAxbC0zLjQ3LTIuMDJhLjgzLjgzIDAgMCAwLS44MSAwTC4zNyAxOC44OGEuODcuODcgMCAwIDAtLjM3LjcxdjQuMDFjMCAuMjkuMTUuNTUuNC43bDMuNDcgMi4wMWguMDJjLjA1LjA0LjExLjA2LjE3LjA4aC4wM2MuMDUuMDIuMTEuMDMuMTYuMDNoLjAzYy4wNiAwIC4xMiAwIC4xOC0uMDJoLjA0Yy4wNi0uMDMuMTItLjA1LjE4LS4wOGwxLjc0LTFjLjY3LS4zOSAxLjUtLjM5IDIuMTcgMHMxLjA5IDEuMTEgMS4wOSAxLjg4djIuMDFjMCAuMDcgMCAuMTMuMDIuMTl2LjA0Yy4wMy4wNi4wNS4xMS4wOC4xN2wuMDIuMDJzLjA2LjA5LjEuMTRsLjAyLjAycy4wOS4wOC4xNS4xMWguMDFsMy40OCAyLjAyYy4yNS4xNC41Ni4xNC44MSAwbDMuNDgtMi4wMWMuMjUtLjE0LjQtLjQxLjQtLjdWMjUuMmEuODEuODEgMCAwIDAtLjQtLjdaIiBzdHlsZT0iZmlsbDojNDI5M2Q5Ii8+PC9zdmc+
-[deepwiki-link]: https://deepwiki.com/CherryHQ/cherry-studio
-[twitter-shield]: https://img.shields.io/badge/Twitter-CherryStudioApp-0088CC?logo=x
-[twitter-link]: https://twitter.com/CherryStudioHQ
-[discord-shield]: https://img.shields.io/badge/Discord-@CherryStudio-0088CC?logo=discord
-[discord-link]: https://discord.gg/wez8HtpxqQ
-[telegram-shield]: https://img.shields.io/badge/Telegram-@CherryStudioAI-0088CC?logo=telegram
-[telegram-link]: https://t.me/CherryStudioAI
+## Notes and limitations
 
-<!-- Links & Images -->
+- Incremental refresh needs a sidecar index. Legacy directories may require one full refresh first.
+- The API Server must be running and reachable from the machine executing the CLI.
+- Write APIs require the same API key configured in Cherry Studio API Server settings.
+- Directory sync matches knowledge bases by name when using `--config`.
+- Local config files that contain private paths or API keys should not be committed.
 
-[github-release-shield]: https://img.shields.io/github/v/release/CherryHQ/cherry-studio?logo=github
-[github-release-link]: https://github.com/CherryHQ/cherry-studio/releases
-[github-nightly-shield]: https://img.shields.io/github/actions/workflow/status/CherryHQ/cherry-studio/nightly-build.yml?label=nightly%20build&logo=github
-[github-nightly-link]: https://github.com/CherryHQ/cherry-studio/actions/workflows/nightly-build.yml
-[github-contributors-shield]: https://img.shields.io/github/contributors/CherryHQ/cherry-studio?logo=github
-[github-contributors-link]: https://github.com/CherryHQ/cherry-studio/graphs/contributors
+## Upstream and license
 
-<!-- Links & Images -->
+This fork is based on [CherryHQ/cherry-studio](https://github.com/CherryHQ/cherry-studio).
 
-[license-shield]: https://img.shields.io/badge/License-AGPLv3-important.svg?logo=gnu
-[license-link]: https://www.gnu.org/licenses/agpl-3.0
-[commercial-shield]: https://img.shields.io/badge/License-Contact-white.svg?logoColor=white&logo=telegram&color=blue
-[commercial-link]: mailto:license@cherry-ai.com?subject=Commercial%20License%20Inquiry
-[sponsor-shield]: https://img.shields.io/badge/Sponsor-FF6699.svg?logo=githubsponsors&logoColor=white
-[sponsor-link]: https://github.com/CherryHQ/cherry-studio/blob/main/docs/dev/sponsor.md
+Cherry Studio Community Edition is licensed under AGPL-3.0. See [LICENSE](LICENSE) for details.
