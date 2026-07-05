@@ -72,6 +72,8 @@ AGENTS.override.md
 
 # Local Electron development
 .context/cherry-electron-dev/
+.cherry-api-key.txt
+scripts/knowledge-index-report-*.txt
 
 # Website documentation renderer
 .context/website-docs-renderer/
