@@ -36,7 +36,14 @@ const logger = loggerService.withContext('Knowledge:IndexDocumentsJobHandler')
 
 // Chunks per embedMany call while rebuilding an item's material. Small enough to
 // surface incremental progress, large enough to not multiply request overhead.
-const EMBEDDING_PROGRESS_BATCH_SIZE = 10
+//
+// Kept at 1 deliberately: local embedding servers (Ollama) run a single llama-server
+// slot (`-np 1`), and batched + concurrent embedMany calls translate into a burst of
+// simultaneous HTTP requests that make the runner drop connections mid-flight, which
+// surfaces as `Bad Request` failures. One request at a time keeps embedding reliable.
+const EMBEDDING_PROGRESS_BATCH_SIZE = 1
+const EMPTY_INDEXABLE_TEXT_ERROR =
+  'No indexable text was extracted. Check the source, OCR, or document processing settings, then reindex.'
 
 /**
  * How long the final percentage lingers after the job exits. The list's item status
@@ -66,7 +73,10 @@ export function createIndexDocumentsJobHandler(
     // embedding API; the item is parked at `failed` and reindexed on demand.
     recovery: 'abandon',
     defaultQueue: (input) => knowledgeQueueName(toKnowledgeBaseId(input.baseId)),
-    defaultConcurrency: 5,
+    // Serialized on purpose: each handler issues embedding requests, and a local single-slot
+    // server cannot absorb the burst that 5 concurrent handlers produce. See
+    // EMBEDDING_PROGRESS_BATCH_SIZE above.
+    defaultConcurrency: 1,
     defaultRetryPolicy: {
       maxAttempts: 3,
       backoff: 'exponential',

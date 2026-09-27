@@ -48,6 +48,7 @@ import {
   type KnowledgeItemId,
   knowledgePrepareIdempotencyKey,
   knowledgeQueueName,
+  knowledgeRefreshDirectoryIdempotencyKey,
   knowledgeReindexSubtreeIdempotencyKey,
   toKnowledgeBaseId,
   toKnowledgeItemId,
@@ -269,11 +270,11 @@ export class KnowledgeIngestionService implements KnowledgeItemScheduler {
     )
   }
 
-  async reindexItems(baseId: string, itemIds: string[]): Promise<void> {
+  async reindexItems(baseId: string, itemIds: string[]): Promise<string | null> {
     assertBaseCanRunRuntimeOperation(baseId, 'reindexItems')
     const rootItemIds = knowledgeItemService.getOutermostSelectedItemIds(baseId, itemIds)
     if (rootItemIds.length === 0) {
-      return
+      return null
     }
 
     await this.assertSubtreesCanReindex(baseId, rootItemIds)
@@ -281,6 +282,7 @@ export class KnowledgeIngestionService implements KnowledgeItemScheduler {
     knowledgeBaseService.getById(baseId)
     const knowledgeBaseId = toKnowledgeBaseId(baseId)
     const jobManager = application.get('JobManager')
+    const jobIds: string[] = []
     // Re-check statuses under the base lock: a backfill may have activated these items during the
     // source check, and it looks for this reindex's jobs under the same lock.
     await this.knowledgeLockManager.runExclusive(baseId, () => {
@@ -288,16 +290,42 @@ export class KnowledgeIngestionService implements KnowledgeItemScheduler {
       // One job per root: a delete or replace cancels every job touching its subtree, so roots
       // sharing a job would all be interrupted with it.
       for (const rootItemId of toKnowledgeItemIds(rootItemIds)) {
-        jobManager.enqueue(
-          'knowledge.reindex-subtree',
-          { baseId, rootItemIds: [rootItemId] },
-          {
-            idempotencyKey: knowledgeReindexSubtreeIdempotencyKey(knowledgeBaseId, [rootItemId]),
-            queue: knowledgeQueueName(knowledgeBaseId)
-          }
+        jobIds.push(
+          jobManager.enqueue(
+            'knowledge.reindex-subtree',
+            { baseId, rootItemIds: [rootItemId] },
+            {
+              idempotencyKey: knowledgeReindexSubtreeIdempotencyKey(knowledgeBaseId, [rootItemId]),
+              queue: knowledgeQueueName(knowledgeBaseId)
+            }
+          ).id
         )
       }
     })
+    // One job is enqueued per selected root; callers tracking a single backend job follow the first.
+    return jobIds[0] ?? null
+  }
+
+  async refreshDirectoryItem(baseId: string, itemId: string): Promise<string> {
+    assertBaseCanRunRuntimeOperation(baseId, 'refreshDirectoryItem')
+    const item = knowledgeItemService.getById(itemId)
+    if (item.baseId !== baseId || item.type !== 'directory') {
+      throw DataApiErrorFactory.validation({
+        item: [`Knowledge item '${itemId}' must be a directory in base '${baseId}'`]
+      })
+    }
+    await this.assertSubtreesCanReindex(baseId, [itemId])
+
+    const knowledgeBaseId = toKnowledgeBaseId(baseId)
+    const knowledgeItemId = toKnowledgeItemId(itemId)
+    return application.get('JobManager').enqueue(
+      'knowledge.refresh-directory',
+      { baseId, itemId },
+      {
+        idempotencyKey: knowledgeRefreshDirectoryIdempotencyKey(knowledgeBaseId, knowledgeItemId),
+        queue: knowledgeQueueName(knowledgeBaseId)
+      }
+    ).id
   }
 
   /**

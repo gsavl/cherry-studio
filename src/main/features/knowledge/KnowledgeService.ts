@@ -33,6 +33,7 @@ import { createCopySourcesJobHandler } from './tasks/copySourcesJobHandler'
 import { createDeleteSubtreeJobHandler } from './tasks/deleteSubtreeJobHandler'
 import { createIndexDocumentsJobHandler } from './tasks/indexDocumentsJobHandler'
 import { createPrepareRootJobHandler } from './tasks/prepareRootJobHandler'
+import { createRefreshDirectoryJobHandler } from './tasks/refreshDirectoryJobHandler'
 import { createReindexSubtreeJobHandler } from './tasks/reindexSubtreeJobHandler'
 import type { KnowledgeBaseDiscoveryOptions, KnowledgeBaseDiscoveryPage } from './types'
 
@@ -83,6 +84,10 @@ export class KnowledgeService extends BaseService {
     this.registerDisposable(
       application.get('FileProcessingService').onDidChangeTask((task) => this.fileProcessingWaits.mirrorProgress(task))
     )
+    jobManager.registerHandler(
+      'knowledge.refresh-directory',
+      createRefreshDirectoryJobHandler(this.knowledgeLockManager, this.ingestionService)
+    )
   }
 
   protected async onAllReady(): Promise<void> {
@@ -131,8 +136,12 @@ export class KnowledgeService extends BaseService {
     await this.ingestionService.deleteItems(baseId, itemIds)
   }
 
-  async reindexItems(baseId: string, itemIds: string[]): Promise<void> {
-    await this.ingestionService.reindexItems(baseId, itemIds)
+  async reindexItems(baseId: string, itemIds: string[]): Promise<string | null> {
+    return await this.ingestionService.reindexItems(baseId, itemIds)
+  }
+
+  async refreshDirectoryItem(baseId: string, itemId: string): Promise<string> {
+    return await this.ingestionService.refreshDirectoryItem(baseId, itemId)
   }
 
   /** Configure an embedding model on a BM25-only base and backfill embeddings in place (see KnowledgeIngestionService.enableEmbeddingModel). */

@@ -21,6 +21,8 @@ interface CliOptions {
   wait?: boolean
   refreshExisting?: boolean
   refreshIfExists?: boolean
+  allowFailures?: boolean
+  failureReport?: string
 }
 
 interface DirectoryItem {
@@ -115,6 +117,12 @@ function parseArgs(argv: string[]): { command?: string; options: CliOptions } {
       case '--refresh-if-exists':
         options.refreshIfExists = true
         break
+      case '--allow-failures':
+        options.allowFailures = true
+        break
+      case '--failure-report':
+        options.failureReport = readValue()
+        break
       default:
         if (arg.startsWith('--')) {
           throw new Error(`Unknown option: ${arg}`)
@@ -142,11 +150,16 @@ function usage(): string {
     'Usage:',
     '  pnpm tsx scripts/cherry-knowledge.ts list [--api http://127.0.0.1:23333] [--api-key-file key.txt]',
     '  pnpm tsx scripts/cherry-knowledge.ts sync-directories --base-name <name> <dir> [dir...] [--refresh-existing] [--mode incremental|full] [--wait]',
-    '  pnpm tsx scripts/cherry-knowledge.ts sync-directories --config kb-dirs.yaml [--base-name <name>] [--refresh-existing] [--mode incremental|full] [--wait]',
+    '  pnpm tsx scripts/cherry-knowledge.ts sync-directories --config kb-dirs.yaml [--base-name <name>] [--refresh-existing] [--mode incremental|full] [--wait] [--allow-failures] [--failure-report <file>]',
     '  pnpm tsx scripts/cherry-knowledge.ts add-directory --base <baseId> --path <dir> [--refresh-if-exists] [--wait]',
     '  pnpm tsx scripts/cherry-knowledge.ts refresh-directory --base <baseId> --item <itemId> [--wait]',
     '  pnpm tsx scripts/cherry-knowledge.ts refresh-file --base <baseId> --directory-item <itemId> --file <file> [--fallback error|full-directory] [--wait]',
     '  pnpm tsx scripts/cherry-knowledge.ts job --job <jobId>',
+    '',
+    'Options:',
+    '  --allow-failures    sync-directories: tolerate per-directory failures, print a summary,',
+    '                      and keep exit code 0 (operational errors still fail the run)',
+    '  --failure-report    sync-directories: write tolerated failure count and paths to this file',
     '',
     'Environment:',
     '  CHERRY_API_KEY      Path to a file containing the API Server bearer token',
@@ -458,7 +471,9 @@ function getDirectoryItems(base: JsonObject): DirectoryItem[] {
   const items = Array.isArray(base.items) ? (base.items as JsonObject[]) : []
   return items.flatMap((item) => {
     const id = getStringField(item, 'id')
-    const content = getStringField(item, 'content')
+    const data =
+      item.data && typeof item.data === 'object' && !Array.isArray(item.data) ? (item.data as JsonObject) : {}
+    const content = getStringField(data, 'source') || getStringField(item, 'content')
     return item.type === 'directory' && id && content ? [{ id, content }] : []
   })
 }
@@ -578,11 +593,53 @@ async function waitForJobIfNeeded(options: CliOptions, job: JsonObject): Promise
 }
 
 async function syncDirectories(options: CliOptions): Promise<JsonObject> {
-  if (options.config) {
-    return syncDirectoriesFromConfig(options)
+  const result = options.config ? await syncDirectoriesFromConfig(options) : await syncDirectoryGroup(options)
+
+  if (options.allowFailures) {
+    reportToleratedFailures(result, options)
   }
 
-  return syncDirectoryGroup(options)
+  return result
+}
+
+// With --allow-failures, per-directory failures are expected (e.g. the embedding backend
+// is briefly unavailable). Summarize them on stderr and optionally persist a machine-readable
+// report instead of failing the whole run; genuine operational errors still throw and exit 1.
+function reportToleratedFailures(result: JsonObject, options: CliOptions): void {
+  const groups: JsonObject[] = Array.isArray(result.knowledge_bases)
+    ? (result.knowledge_bases as JsonObject[])
+    : [result]
+
+  const failures: SyncDirectoryResult[] = []
+  let total = 0
+  for (const group of groups) {
+    if (!Array.isArray(group.results)) continue
+    for (const entry of group.results as SyncDirectoryResult[]) {
+      total += 1
+      if (entry.action === 'failed' || entry.status === 'failed') {
+        failures.push(entry)
+      }
+    }
+  }
+
+  if (failures.length === 0) {
+    return
+  }
+
+  console.error('')
+  console.error(`*** Tolerated partial failures: ${failures.length} of ${total} directories failed ***`)
+  for (const failure of failures) {
+    console.error(`  - ${failure.path}${failure.error ? ` (${failure.error})` : ''}`)
+  }
+
+  if (options.failureReport) {
+    const lines = [
+      `failed_directories=${failures.length}`,
+      `total_directories=${total}`,
+      ...failures.map((failure) => failure.path)
+    ]
+    fs.writeFileSync(path.resolve(options.failureReport), `${lines.join('\n')}\n`, 'utf8')
+  }
 }
 
 async function syncDirectoriesFromConfig(options: CliOptions): Promise<JsonObject> {
@@ -618,6 +675,7 @@ async function syncDirectoriesFromConfig(options: CliOptions): Promise<JsonObjec
   }
 
   if (
+    !options.allowFailures &&
     knowledgeBases.some((base) =>
       Array.isArray(base.results)
         ? (base.results as SyncDirectoryResult[]).some(
@@ -722,7 +780,7 @@ async function syncDirectoryGroup(options: CliOptions): Promise<JsonObject> {
     }
   }
 
-  if (results.some((result) => result.action === 'failed' || result.status === 'failed')) {
+  if (!options.allowFailures && results.some((result) => result.action === 'failed' || result.status === 'failed')) {
     process.exitCode = 1
   }
 

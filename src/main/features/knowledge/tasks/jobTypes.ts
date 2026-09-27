@@ -44,6 +44,10 @@ declare module '@main/core/job/jobRegistry' {
       baseId: string
       rootItemIds: string[]
     }
+    'knowledge.refresh-directory': {
+      baseId: string
+      itemId: string
+    }
   }
 }
 
@@ -53,3 +57,4 @@ export type KnowledgeIndexDocumentsPayload = JobPayloadOf<'knowledge.index-docum
 export type KnowledgeCheckFileProcessingResultPayload = JobPayloadOf<'knowledge.check-file-processing-result'>
 export type KnowledgeDeleteSubtreePayload = JobPayloadOf<'knowledge.delete-subtree'>
 export type KnowledgeReindexSubtreePayload = JobPayloadOf<'knowledge.reindex-subtree'>
+export type KnowledgeRefreshDirectoryPayload = JobPayloadOf<'knowledge.refresh-directory'>

@@ -825,6 +825,46 @@ export class KnowledgeItemService {
     return this.patchItemData(id, ['file'], { indexedRelativePath }, 'indexed relative path')
   }
 
+  updateFileSourceFingerprint(
+    id: string,
+    sourceFingerprint: NonNullable<Extract<KnowledgeItemData, { relativePath: string }>['sourceFingerprint']>,
+    options: { clearIndexedRelativePath?: boolean } = {}
+  ): KnowledgeItem {
+    const dbService = application.get('DbService')
+    const row = dbService.withWriteTx((tx) => {
+      const [existingRow] = tx.select().from(knowledgeItemTable).where(eq(knowledgeItemTable.id, id)).limit(1).all()
+      if (!existingRow) {
+        throw DataApiErrorFactory.notFound('KnowledgeItem', id)
+      }
+
+      const existingItem = rowToKnowledgeItem(existingRow)
+      if (existingItem.type !== 'file') {
+        throw DataApiErrorFactory.validation({ type: [`Knowledge item ${id} must be a file to store its fingerprint`] })
+      }
+
+      const data = { ...existingItem.data, sourceFingerprint }
+      if (options.clearIndexedRelativePath) {
+        delete data.indexedRelativePath
+      }
+      const [updatedRow] = tx
+        .update(knowledgeItemTable)
+        .set({ data })
+        .where(eq(knowledgeItemTable.id, id))
+        .returning()
+        .all()
+      if (!updatedRow) {
+        throw DataApiErrorFactory.dataInconsistent(
+          'KnowledgeItem',
+          `Knowledge file fingerprint update missing for '${id}'`
+        )
+      }
+      return updatedRow
+    })
+
+    logger.info('Updated knowledge file source fingerprint', { id })
+    return rowToKnowledgeItem(row)
+  }
+
   /**
    * Unpin a file item from its processed artifact so it indexes from its own bytes again.
    * Used when a reindex refreshed the source but the base will not regenerate the artifact,

@@ -10,17 +10,53 @@ import { DataApiError, DataApiErrorFactory } from '@shared/data/api/errors'
  * shaping (DataApiError → `{ error: { code, message } }` with its HTTP status).
  */
 
-const { mockList, mockGetById, mockSearch } = vi.hoisted(() => ({
+const {
+  mockList,
+  mockGetById,
+  mockListRootItems,
+  mockSearch,
+  mockReadConcept,
+  mockReindexItems,
+  mockRefreshDirectoryItem,
+  mockJobGet,
+  mockItemGetById
+} = vi.hoisted(() => ({
   mockList: vi.fn<(query: unknown) => unknown>(),
   mockGetById: vi.fn<(id: string) => unknown>(),
-  mockSearch: vi.fn<(baseId: string, query: string) => Promise<unknown[]>>()
+  mockListRootItems: vi.fn<(baseId: string) => unknown[]>(),
+  mockSearch: vi.fn<(baseId: string, query: string) => Promise<unknown[]>>(),
+  mockReadConcept:
+    vi.fn<(baseId: string, conceptId: string, range: { charStart?: number; charEnd?: number }) => Promise<unknown>>(),
+  mockReindexItems: vi.fn<(baseId: string, itemIds: string[]) => Promise<string | null>>(),
+  mockRefreshDirectoryItem: vi.fn<(baseId: string, itemId: string) => Promise<string>>(),
+  mockJobGet: vi.fn<(jobId: string) => Promise<unknown>>(),
+  mockItemGetById: vi.fn<(itemId: string) => unknown>()
 }))
 
 vi.mock('@data/services/KnowledgeBaseService', () => ({
   knowledgeBaseService: { list: mockList, getById: mockGetById }
 }))
+vi.mock('@data/services/KnowledgeItemService', () => ({
+  knowledgeItemService: { getById: mockItemGetById }
+}))
 vi.mock('@application', () => ({
-  application: { get: vi.fn(() => ({ search: mockSearch })) }
+  application: {
+    get: vi.fn((name: string) => {
+      if (name === 'KnowledgeService') {
+        return {
+          listRootItems: mockListRootItems,
+          search: mockSearch,
+          readConcept: mockReadConcept,
+          reindexItems: mockReindexItems,
+          refreshDirectoryItem: mockRefreshDirectoryItem
+        }
+      }
+      if (name === 'JobManager') {
+        return { get: mockJobGet }
+      }
+      throw new Error(`Unexpected application.get(${name})`)
+    })
+  }
 }))
 vi.mock('@logger', () => ({
   loggerService: { withContext: vi.fn(() => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() })) }
@@ -60,6 +96,18 @@ async function call(method: string, path: string, body?: unknown): Promise<{ sta
 describe('knowledge routes (v2)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockListRootItems.mockReturnValue([])
+    mockReindexItems.mockResolvedValue('backend-job-1')
+    mockRefreshDirectoryItem.mockResolvedValue('incremental-job-1')
+    mockJobGet.mockResolvedValue({ id: 'backend-job-1', status: 'pending', error: null })
+    mockItemGetById.mockReturnValue({
+      id: 'directory-1',
+      baseId: 'kb-1',
+      type: 'directory',
+      status: 'completed',
+      error: null,
+      data: { source: 'Z:\\knowledge' }
+    })
   })
 
   it('GET /knowledge-bases applies a true offset/limit window', async () => {
@@ -89,11 +137,99 @@ describe('knowledge routes (v2)', () => {
     expect(body.knowledge_bases[19].id).toBe('kb-24')
   })
 
+  it('GET /knowledge-bases includes v2 root items used to detect bound directories', async () => {
+    mockList.mockReturnValue({ items: [kb('kb-1', 'KB 1')], total: 1, page: 1 })
+    mockListRootItems.mockReturnValue([
+      {
+        id: 'directory-1',
+        baseId: 'kb-1',
+        type: 'directory',
+        status: 'completed',
+        data: { source: 'Z:\\knowledge' }
+      }
+    ])
+
+    const { status, body } = await call('GET', '/knowledge-bases')
+
+    expect(status).toBe(200)
+    expect(mockListRootItems).toHaveBeenCalledWith('kb-1')
+    expect(body.knowledge_bases[0].items).toEqual([
+      expect.objectContaining({ id: 'directory-1', type: 'directory', data: { source: 'Z:\\knowledge' } })
+    ])
+  })
+
   it('GET /knowledge-bases/:id returns a base', async () => {
     mockGetById.mockReturnValue(kb('kb-1', 'KB 1'))
     const { status, body } = await call('GET', '/knowledge-bases/kb-1')
     expect(status).toBe(200)
     expect(body.id).toBe('kb-1')
+  })
+
+  it('POST /knowledge-bases/:id/read returns indexed document content', async () => {
+    mockReadConcept.mockResolvedValue({
+      conceptId: 'articles/example.md',
+      title: 'example.md',
+      itemType: 'file',
+      totalChars: 12,
+      charStart: 2,
+      charEnd: 8,
+      content: '正文内容',
+      truncated: true
+    })
+
+    const { status, body } = await call('POST', '/knowledge-bases/kb-1/read', {
+      concept_id: 'articles/example.md',
+      char_start: 2,
+      char_end: 8
+    })
+
+    expect(status).toBe(200)
+    expect(body.content).toBe('正文内容')
+    expect(mockReadConcept).toHaveBeenCalledWith('kb-1', 'articles/example.md', { charStart: 2, charEnd: 8 })
+  })
+
+  it('waits for the backend refresh job before reporting a completed directory', async () => {
+    const started = await call('POST', '/knowledge-bases/kb-1/directories/directory-1/refresh', {})
+
+    expect(started.status).toBe(200)
+    expect(started.body.status).toBe('running')
+    expect(started.body.backend_job_id).toBe('backend-job-1')
+
+    mockJobGet.mockResolvedValue({ id: 'backend-job-1', status: 'completed', error: null })
+    mockItemGetById.mockReturnValue({
+      id: 'directory-1',
+      baseId: 'kb-1',
+      type: 'directory',
+      status: 'processing',
+      error: null,
+      data: { source: 'Z:\\knowledge' }
+    })
+    const processing = await call('GET', `/knowledge-bases/jobs/${started.body.id}`)
+    expect(processing.body.status).toBe('running')
+
+    mockItemGetById.mockReturnValue({
+      id: 'directory-1',
+      baseId: 'kb-1',
+      type: 'directory',
+      status: 'completed',
+      error: null,
+      data: { source: 'Z:\\knowledge' }
+    })
+    const completed = await call('GET', `/knowledge-bases/jobs/${started.body.id}`)
+    expect(completed.body.status).toBe('completed')
+  })
+
+  it('routes incremental directory refreshes to the v2 incremental job', async () => {
+    mockJobGet.mockResolvedValue({ id: 'incremental-job-1', status: 'pending', error: null })
+
+    const response = await call('POST', '/knowledge-bases/kb-1/directories/directory-1/refresh', {
+      mode: 'incremental'
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.body.backend_job_id).toBe('incremental-job-1')
+    expect(mockRefreshDirectoryItem).toHaveBeenCalledWith('kb-1', 'directory-1')
+    expect(mockReindexItems).not.toHaveBeenCalled()
   })
 
   it('GET /knowledge-bases/:id maps a DataApiError NOT_FOUND → 404 REST envelope', async () => {

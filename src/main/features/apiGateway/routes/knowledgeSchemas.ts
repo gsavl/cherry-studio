@@ -20,6 +20,12 @@ export const KnowledgeSearchSchema = z.object({
   document_count: z.coerce.number().int().min(1).max(20).default(5)
 })
 
+export const KnowledgeConceptReadSchema = z.object({
+  concept_id: z.string().min(1, 'Concept ID is required'),
+  char_start: z.coerce.number().int().min(0).optional(),
+  char_end: z.coerce.number().int().min(0).optional()
+})
+
 /** `GET /` pagination query. */
 export const PaginationQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20).optional(),
@@ -31,15 +37,42 @@ export const KnowledgeBaseIdParamSchema = z.object({
   id: KnowledgeBaseIdSchema
 })
 
+export const KnowledgeDirectoryParamsSchema = z.object({
+  id: KnowledgeBaseIdSchema,
+  itemId: z.string().min(1, 'Directory item ID is required')
+})
+
+export const KnowledgeJobParamsSchema = z.object({
+  jobId: z.string().min(1, 'Knowledge job ID is required')
+})
+
+export const AddKnowledgeDirectorySchema = z.object({
+  path: z.string().trim().min(1, 'Directory path is required'),
+  mode: z.enum(['enqueue', 'sync']).default('enqueue').optional(),
+  refresh_if_exists: z.boolean().default(false).optional()
+})
+
+export const RefreshKnowledgeDirectorySchema = z.object({
+  mode: z.enum(['full', 'incremental']).default('full').optional()
+})
+
+export const RefreshKnowledgeDirectoryFileSchema = z.object({
+  path: z.string().trim().min(1, 'File path is required'),
+  fallback: z.enum(['error', 'full-directory']).default('error').optional()
+})
+
 // ── Response schemas ────────────────────────────────────────────────
 
 /** A knowledge base entry / search result — kept loose (rich v2 shapes). */
 const KnowledgeBaseEntry = z.looseObject({ id: z.string(), name: z.string() })
+const KnowledgeBaseListEntry = KnowledgeBaseEntry.extend({
+  items: z.array(z.looseObject({ id: z.string(), type: z.string() }))
+})
 const KnowledgeSearchEntry = z.looseObject({ chunkId: z.string(), score: z.number() })
 const SearchedBase = z.object({ id: z.string(), name: z.string() })
 
 export const ListKnowledgeBasesResponseSchema = z.object({
-  knowledge_bases: z.array(KnowledgeBaseEntry),
+  knowledge_bases: z.array(KnowledgeBaseListEntry),
   total: z.number()
 })
 
@@ -51,4 +84,15 @@ export const SearchKnowledgeResponseSchema = z.object({
   total: z.number(),
   searched_bases: z.array(SearchedBase),
   warnings: z.array(z.string()).optional()
+})
+
+export const KnowledgeConceptReadResponseSchema = z.object({
+  conceptId: z.string(),
+  title: z.string(),
+  itemType: z.string(),
+  totalChars: z.number(),
+  charStart: z.number(),
+  charEnd: z.number(),
+  content: z.string(),
+  truncated: z.boolean()
 })

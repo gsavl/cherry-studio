@@ -1,0 +1,3 @@
+before: OLLAMA_MAX_LOADED_MODELS = [1]
+after:  OLLAMA_MAX_LOADED_MODELS = [2]
+note: takes effect only after Ollama restarts

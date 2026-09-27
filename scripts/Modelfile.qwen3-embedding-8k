@@ -1,0 +1,12 @@
+# Derived embedding model with a small context window.
+#
+# Why: the stock `qwen3-embedding:8b` was created with Ollama's default
+# num_ctx (262144), but the model itself only supports n_ctx_train=40960.
+# Serving it at 262144 makes Ollama over-allocate KV cache, evict the
+# llama-server runner mid-request, and return HTTP 400 to Cherry Studio
+# ("An existing connection was forcibly closed by the remote host").
+#
+# Build:  ollama create qwen3-embedding-8k -f scripts/Modelfile.qwen3-embedding-8k
+FROM qwen3-embedding:8b
+
+PARAMETER num_ctx 8192

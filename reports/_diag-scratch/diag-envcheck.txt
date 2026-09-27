@@ -1,0 +1,5 @@
+User    OLLAMA_MAX_LOADED_MODELS = [2]
+Process OLLAMA_MAX_LOADED_MODELS = [1]
+User    OLLAMA_NUM_PARALLEL = [1]
+Process OLLAMA_NUM_PARALLEL = [1]
+ollama server pid: none

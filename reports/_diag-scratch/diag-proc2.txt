@@ -1,0 +1,4 @@
+pid=46700  started=09/26/2026 15:10:44  path=C:\Users\alexy\workspace\cherry-studio\dist\win-unpacked\Cherry Studio.exe
+pid=42964  started=09/26/2026 15:10:47  path=C:\Users\alexy\workspace\cherry-studio\dist\win-unpacked\Cherry Studio.exe
+pid=46696  started=09/26/2026 15:10:47  path=C:\Users\alexy\workspace\cherry-studio\dist\win-unpacked\Cherry Studio.exe
+now: 2026-09-26T15:20:38.1516124+08:00

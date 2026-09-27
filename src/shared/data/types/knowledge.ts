@@ -321,7 +321,17 @@ export const FileItemDataSchema = KnowledgeItemSharedSchema.extend({
   ),
   indexedRelativePath: KnowledgeRelativePathSchema.optional().describe(
     'Knowledge-base-relative, POSIX-normalized path for the file actually indexed, such as a processed markdown artifact.'
-  )
+  ),
+  sourceFingerprint: z
+    .strictObject({
+      size: z.number().int().nonnegative(),
+      modifiedAt: z.number().nonnegative(),
+      contentHash: z.string().min(1)
+    })
+    .optional()
+    .describe(
+      'Fingerprint of a directory-bound source file after its latest successful incremental refresh comparison.'
+    )
 })
 export type FileItemData = z.infer<typeof FileItemDataSchema>
 

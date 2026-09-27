@@ -1,0 +1,4 @@
+remaining: 0
+launching with OLLAMA_MAX_LOADED_MODELS=2
+running ollama:62844
+running ollama app:35376

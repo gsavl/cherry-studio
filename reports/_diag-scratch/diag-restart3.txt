@@ -1,0 +1,2 @@
+event query failed: 找不到与指定的选择条件匹配的事件。
+after restart: ollama:64240, ollama app:58164

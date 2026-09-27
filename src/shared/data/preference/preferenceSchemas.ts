@@ -920,7 +920,7 @@ export const DefaultPreferences: PreferenceSchemas = {
     'feature.agent.file_pane.word_wrap': true,
     'feature.api_gateway.api_key': null,
     'feature.api_gateway.enabled': false,
-    'feature.api_gateway.host': '127.0.0.1',
+    'feature.api_gateway.host': '0.0.0.0',
     'feature.api_gateway.port': 23333,
     'feature.binary.install_settings': { githubMirror: '', githubToken: '', npmRegistry: '', pipIndexUrl: '', verifySignatures: true },
     'feature.binary.tools': [],

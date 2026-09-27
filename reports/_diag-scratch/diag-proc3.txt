@@ -1,0 +1,3 @@
+no ollama process
+--- port 11434 ---
+not listening: 用于获取位于  CIM 服务器上 ROOT/StandardCimv2/MSFT_NetTCPConnection 类实例的 CIM 查询: SELECT * FROM MSFT_NetTCPConnection  WHERE ((LocalPort = 11434)) AND ((State = 2)) 未找到匹配的 MSFT_NetTCPConnection 对象。请验证查询参数，然后重试。

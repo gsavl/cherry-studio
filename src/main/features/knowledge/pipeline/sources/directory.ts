@@ -30,6 +30,31 @@ export type ExpandedDirectoryNode =
       data: Pick<FileItemData, 'source' | 'relativePath'>
     }
 
+export interface ScannedDirectoryFile {
+  externalPath: string
+  relativePath: string
+}
+
+export async function scanDirectoryFiles(sourcePath: string, signal: AbortSignal): Promise<ScannedDirectoryFile[]> {
+  const rootPath = path.resolve(sourcePath)
+  const nodes = await readDirectoryTree(rootPath, signal)
+  const files: ScannedDirectoryFile[] = []
+
+  const collect = (entries: DirectoryEntryNode[]) => {
+    for (const entry of entries) {
+      signal.throwIfAborted()
+      if (entry.type === 'folder') {
+        collect(entry.children ?? [])
+      } else if (KNOWLEDGE_SUPPORTED_FILE_EXT_SET.has(path.extname(entry.externalPath).toLowerCase())) {
+        files.push({ externalPath: entry.externalPath, relativePath: entry.treePath.replace(/^\/+/, '') })
+      }
+    }
+  }
+
+  collect(nodes)
+  return files
+}
+
 async function readDirectoryTree(
   dirPath: string,
   signal: AbortSignal,
