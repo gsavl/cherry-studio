@@ -78,6 +78,14 @@ scripts/knowledge-index-report-*.txt
 # Website documentation renderer
 .context/website-docs-renderer/
 
+# Local diagnostics and scratch work (not part of the repo)
+.context/cherry-knowledge-mcp/
+.workbuddy/
+reports/_diag-scratch/
+
+# Vite-generated temporary config snapshots (timestamped)
+electron.vite.config.*.mjs
+
 # vitest
 coverage
 .vitest-cache

@@ -1,2 +1,0 @@
-Start-Process ok: C:\Users\alexy\AppData\Local\Programs\Ollama\ollama app.exe
-running: llama-server:64244, ollama:60580, ollama app:64188

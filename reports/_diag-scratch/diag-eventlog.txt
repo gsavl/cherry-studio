@@ -1,3 +1,0 @@
-app-error events (llama/ollama): 1
-- 11:15:40 [Microsoft-Windows-RestartManager] 无法关闭应用程序或服务“llama-server.exe”。
-system-error events: 0

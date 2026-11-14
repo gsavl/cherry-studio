@@ -1,8 +1,0 @@
-before:
-  llama-server pid=62580
-  ollama pid=10212
-  ollama app pid=12516
-stopped 62580
-stopped 10212
-stopped 12516
-after: none
