@@ -175,7 +175,11 @@ if not "%EXIT_CODE%"=="0" (
   goto :finish
 )
 
-echo Sync completed successfully.
+if exist "%FAILURE_REPORT%" (
+  echo Sync finished with directory failures. See "%FAILURE_REPORT%".
+) else (
+  echo Sync completed successfully.
+)
 echo.
 echo Step 3/3: generating knowledge browser HTML...
 echo.
@@ -198,6 +202,7 @@ if exist "%FAILURE_REPORT%" (
   echo The failed paths are listed in:
   echo "%FAILURE_REPORT%"
   echo *******************************************************
+  set "EXIT_CODE=1"
 )
 
 goto :finish

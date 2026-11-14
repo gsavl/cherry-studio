@@ -64,6 +64,8 @@ Project-specific tools, paths, and conventions.
 
 ## Development
 
+For local Windows upgrades, follow [Rebase, rebuild, and restart local Cherry Studio](docs/contrib/local-rebase-rebuild-restart.md), including packaged-build verification and desktop/taskbar shortcut checks. `AGENTS.md` points to this file, so this guide applies to both entry points.
+
 ### Commands
 
 Run `pnpm install` first (Node and pnpm versions are pinned in `package.json` — let it enforce them). For every other script, read `package.json` — the ones you must know:

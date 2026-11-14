@@ -42,8 +42,6 @@ const logger = loggerService.withContext('Knowledge:IndexDocumentsJobHandler')
 // simultaneous HTTP requests that make the runner drop connections mid-flight, which
 // surfaces as `Bad Request` failures. One request at a time keeps embedding reliable.
 const EMBEDDING_PROGRESS_BATCH_SIZE = 1
-const EMPTY_INDEXABLE_TEXT_ERROR =
-  'No indexable text was extracted. Check the source, OCR, or document processing settings, then reindex.'
 
 /**
  * How long the final percentage lingers after the job exits. The list's item status
